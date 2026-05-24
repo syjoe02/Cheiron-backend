@@ -1,0 +1,200 @@
+{
+  "examples": [
+    {
+      "description": "Example 1 — Time series: Pembrolizumab trial growth over the years",
+      "request": {
+        "query": "How many Pembrolizumab trials started each year since 2015?",
+        "drug_name": "Pembrolizumab",
+        "start_year": 2015
+      },
+      "response": {
+        "visualization": {
+          "type": "time_series",
+          "title": "Pembrolizumab Clinical Trials by Start Year (2015–2026)",
+          "encoding": {
+            "x": {"field": "start_year", "type": "temporal"},
+            "y": {"field": "trial_count", "type": "quantitative"}
+          },
+          "data": [
+            {"start_year": 2015, "trial_count": 3, "citations": [{"nct_id": "NCT02397317", "excerpt": "A Phase 1b/2 Study of Pembrolizumab in Combination With Epacadostat in Subjects With Selected Cancers"}]},
+            {"start_year": 2016, "trial_count": 9, "citations": [{"nct_id": "NCT02644369", "excerpt": "Study of the Effects of Pembrolizumab in Patients With Advanced Solid Tumors"}]},
+            {"start_year": 2017, "trial_count": 6, "citations": [{"nct_id": "NCT02958007", "excerpt": "Pembrolizumab Plus Axitinib for Advanced Renal Cell Carcinoma"}]},
+            {"start_year": 2018, "trial_count": 13, "citations": [{"nct_id": "NCT03606174", "excerpt": "A Phase 2 Study of Sitravatinib in Combination With PD-(L)1 Checkpoint Inhibitor Regimens in Patients With Advanced or Metastatic Urothelial Carcinoma"}]},
+            {"start_year": 2019, "trial_count": 6, "citations": []},
+            {"start_year": 2020, "trial_count": 11, "citations": []},
+            {"start_year": 2021, "trial_count": 14, "citations": []},
+            {"start_year": 2022, "trial_count": 8, "citations": []},
+            {"start_year": 2023, "trial_count": 13, "citations": []},
+            {"start_year": 2024, "trial_count": 1, "citations": []},
+            {"start_year": 2025, "trial_count": 10, "citations": []},
+            {"start_year": 2026, "trial_count": 3, "citations": []}
+          ]
+        },
+        "meta": {
+          "filters_applied": {"drug_name": "Pembrolizumab", "start_year": 2015},
+          "source": "ClinicalTrials.gov v2 API",
+          "query_interpretation": "Count of clinical trials involving Pembrolizumab grouped by start year from 2015 onwards",
+          "assumptions": ["Only trials with a recorded start date are included"],
+          "trial_count": 97,
+          "total_matching": 2861
+        }
+      }
+    },
+    {
+      "description": "Example 2 — Bar chart: Breast cancer trial phase distribution",
+      "request": {
+        "query": "What is the phase distribution of breast cancer trials?",
+        "condition": "breast cancer"
+      },
+      "response": {
+        "visualization": {
+          "type": "bar_chart",
+          "title": "Breast Cancer Clinical Trials by Phase",
+          "encoding": {
+            "x": {"field": "category", "type": "nominal"},
+            "y": {"field": "trial_count", "type": "quantitative"}
+          },
+          "data": [
+            {"category": "NA", "trial_count": 47, "citations": [{"nct_id": "NCT04216576", "excerpt": "A Study of the Use of Text Message Reminders to Take Palbociclib"}]},
+            {"category": "PHASE2", "trial_count": 39, "citations": [{"nct_id": "NCT03222856", "excerpt": "Ph II Study of Pembrolizumab & Eribulin in Patients With HR+/HER2- MBC Previously Treated With Anthracyclines & Taxanes"}]},
+            {"category": "PHASE1", "trial_count": 15, "citations": [{"nct_id": "NCT02527746", "excerpt": "Study of F-627 in Women With Breast Cancer Receiving Myelotoxic Chemotherapy"}]},
+            {"category": "PHASE3", "trial_count": 7, "citations": [{"nct_id": "NCT02491983", "excerpt": "Palbociclib in Combination With Fulvestrant or Letrozole in Patients With ER+, HER2- Advanced Breast Cancer"}]},
+            {"category": "EARLY_PHASE1", "trial_count": 1, "citations": []},
+            {"category": "PHASE4", "trial_count": 1, "citations": []}
+          ]
+        },
+        "meta": {
+          "filters_applied": {"condition": "breast cancer"},
+          "source": "ClinicalTrials.gov v2 API",
+          "query_interpretation": "Distribution of breast cancer clinical trials across trial phases",
+          "assumptions": ["Trials without a declared phase are classified as NA", "Sample of 100 trials from 16,414 total"],
+          "trial_count": 100,
+          "total_matching": 16414
+        }
+      }
+    },
+    {
+      "description": "Example 3 — Bar chart (ranking): Top sponsors for breast cancer trials",
+      "request": {
+        "query": "Which sponsors are running the most breast cancer trials?",
+        "condition": "breast cancer"
+      },
+      "response": {
+        "visualization": {
+          "type": "bar_chart",
+          "title": "Top Sponsors by Number of Breast Cancer Trials",
+          "encoding": {
+            "x": {"field": "category", "type": "nominal"},
+            "y": {"field": "trial_count", "type": "quantitative"}
+          },
+          "data": [
+            {"category": "MedSIR", "trial_count": 3, "citations": [{"nct_id": "NCT02491983", "excerpt": "Palbociclib in Combination With Fulvestrant or Letrozole in Patients With ER+, HER2- Advanced Breast Cancer"}, {"nct_id": "NCT03222856", "excerpt": "Ph II Study of Pembrolizumab & Eribulin in Patients With HR+/HER2- MBC Previously Treated With Anthracyclines & Taxanes"}]},
+            {"category": "Memorial Sloan Kettering Cancer Center", "trial_count": 3, "citations": [{"nct_id": "NCT04216576", "excerpt": "A Study of the Use of Text Message Reminders to Take Palbociclib"}, {"nct_id": "NCT01649661", "excerpt": "MRI Parenchymal Enhancement: A New Marker of Breast Cancer Risk"}]},
+            {"category": "EVIVE Biotechnology", "trial_count": 2, "citations": [{"nct_id": "NCT02527746", "excerpt": "Study of F-627 in Women With Breast Cancer Receiving Myelotoxic Chemotherapy"}]},
+            {"category": "Northwestern University", "trial_count": 2, "citations": [{"nct_id": "NCT06081127", "excerpt": "Breast Cancer Pre-habilitation and Prospective Surveillance to Prevent, Detect, and Optimize Physical and Function"}]},
+            {"category": "University of Arizona", "trial_count": 2, "citations": [{"nct_id": "NCT05689359", "excerpt": "Evaluation of Hydroxychloroquine to Prevent CIPN"}]}
+          ]
+        },
+        "meta": {
+          "filters_applied": {"condition": "breast cancer"},
+          "source": "ClinicalTrials.gov v2 API",
+          "query_interpretation": "Top sponsors by number of breast cancer clinical trials, ranked descending",
+          "assumptions": [],
+          "trial_count": 100,
+          "total_matching": 16414
+        }
+      }
+    },
+    {
+      "description": "Example 4 — Network graph: Drug-condition co-occurrence in breast cancer trials",
+      "request": {
+        "query": "Show me which drugs and conditions appear together in breast cancer trials",
+        "condition": "breast cancer",
+        "max_results": 200
+      },
+      "response": {
+        "visualization": {
+          "type": "network_graph",
+          "title": "Drug-Condition Co-occurrence Network in Breast Cancer Trials",
+          "encoding": {
+            "nodes": {"id": "id", "label": "label", "size": "size", "color": "type"},
+            "edges": {"source": "source", "target": "target", "weight": "weight"}
+          },
+          "data": [
+            {
+              "nodes": [
+                {"id": "Pembrolizumab", "label": "Pembrolizumab", "type": "intervention", "size": 65.2},
+                {"id": "Palbociclib", "label": "Palbociclib", "type": "intervention", "size": 48.1},
+                {"id": "Breast Cancer", "label": "Breast Cancer", "type": "condition", "size": 100.0},
+                {"id": "Triple Negative Breast Cancer", "label": "Triple Negative Breast Cancer", "type": "condition", "size": 72.4},
+                {"id": "HER2-positive Breast Cancer", "label": "HER2-positive Breast Cancer", "type": "condition", "size": 58.3}
+              ],
+              "citations": []
+            },
+            {
+              "source": "Pembrolizumab",
+              "target": "Triple Negative Breast Cancer",
+              "weight": 14,
+              "citations": [
+                {"nct_id": "NCT05877859", "excerpt": "Evaluating and Monitoring Immune and Clinical Responses in Early-Stage Triple Negative Breast Cancer Undergoing Neoadjuvant Chemo-immunotherapy With Pembrolizumab"},
+                {"nct_id": "NCT03222856", "excerpt": "Ph II Study of Pembrolizumab & Eribulin in Patients With HR+/HER2- MBC Previously Treated With Anthracyclines & Taxanes"}
+              ]
+            },
+            {
+              "source": "Palbociclib",
+              "target": "Breast Cancer",
+              "weight": 8,
+              "citations": [
+                {"nct_id": "NCT02491983", "excerpt": "Palbociclib in Combination With Fulvestrant or Letrozole in Patients With ER+, HER2- Advanced Breast Cancer"}
+              ]
+            }
+          ]
+        },
+        "meta": {
+          "filters_applied": {"condition": "breast cancer"},
+          "source": "ClinicalTrials.gov v2 API",
+          "query_interpretation": "Co-occurrence network of drugs and conditions within breast cancer clinical trials",
+          "assumptions": ["Conditions capped at 3 per trial to reduce noise", "Graph pruned to top 50 nodes by degree centrality"],
+          "trial_count": 200,
+          "total_matching": 16414
+        }
+      }
+    },
+    {
+      "description": "Example 5 — Grouped bar chart: Pembrolizumab Phase 2 vs Phase 3 trial status comparison",
+      "request": {
+        "query": "Compare the status of Phase 2 versus Phase 3 Pembrolizumab trials",
+        "drug_name": "Pembrolizumab",
+        "phase": ["Phase 2", "Phase 3"]
+      },
+      "response": {
+        "visualization": {
+          "type": "grouped_bar_chart",
+          "title": "Pembrolizumab Trial Status: Phase 2 vs Phase 3",
+          "encoding": {
+            "x": {"field": "group1", "type": "nominal", "title": "Phase"},
+            "y": {"field": "trial_count", "type": "quantitative"},
+            "series": {"field": "group2", "type": "nominal", "title": "Status"}
+          },
+          "data": [
+            {"group1": "PHASE2", "group2": "COMPLETED", "trial_count": 28, "citations": [{"nct_id": "NCT02644369", "excerpt": "Study of the Effects of Pembrolizumab in Patients With Advanced Solid Tumors"}]},
+            {"group1": "PHASE2", "group2": "RECRUITING", "trial_count": 19, "citations": [{"nct_id": "NCT03606174", "excerpt": "A Phase 2 Study of Sitravatinib in Combination With PD-(L)1 Checkpoint Inhibitor Regimens"}]},
+            {"group1": "PHASE2", "group2": "TERMINATED", "trial_count": 7, "citations": []},
+            {"group1": "PHASE3", "group2": "COMPLETED", "trial_count": 15, "citations": []},
+            {"group1": "PHASE3", "group2": "RECRUITING", "trial_count": 9, "citations": []},
+            {"group1": "PHASE3", "group2": "ACTIVE_NOT_RECRUITING", "trial_count": 6, "citations": []}
+          ]
+        },
+        "meta": {
+          "filters_applied": {"drug_name": "Pembrolizumab", "phase": ["Phase 2", "Phase 3"]},
+          "source": "ClinicalTrials.gov v2 API",
+          "query_interpretation": "Comparison of trial status distribution between Phase 2 and Phase 3 Pembrolizumab trials",
+          "assumptions": ["Phase filter applied post-fetch (CT.gov v2 API has no filter.phase parameter)"],
+          "sort_order": "descending",
+          "trial_count": 84,
+          "total_matching": 2861
+        }
+      }
+    }
+  ]
+}

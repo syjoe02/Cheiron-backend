@@ -1,0 +1,102 @@
+from enum import Enum
+from typing import Any
+
+from openai import AsyncOpenAI
+from pydantic import BaseModel
+
+
+class QueryIntent(str, Enum):
+    TREND_OVER_TIME = "TREND_OVER_TIME"
+    DISTRIBUTION = "DISTRIBUTION"
+    COMPARISON = "COMPARISON"
+    CORRELATION = "CORRELATION"
+    RELATIONSHIP_NETWORK = "RELATIONSHIP_NETWORK"
+    RANKING = "RANKING"
+
+
+class ParsedEntities(BaseModel):
+    drug_name: str | None = None
+    condition: str | None = None
+    phase: list[str] | None = None
+    sponsor: str | None = None
+    country: str | None = None
+    start_year: int | None = None
+    end_year: int | None = None
+
+
+class ParsedQuery(BaseModel):
+    intent: QueryIntent
+    entities: ParsedEntities
+    query_interpretation: str
+    assumptions: list[str] = []
+
+
+_SYSTEM_PROMPT = """\
+You are a clinical trials data analyst. Parse the user's natural language query about clinical trials \
+into structured intent and entities.
+
+Intent classification rules:
+- TREND_OVER_TIME: questions about how trials changed over years/time ("over the years", "trend", "per year", "growth", "history")
+- DISTRIBUTION: questions about how trials are distributed across one dimension ("breakdown by phase", "by status", "how are trials split")
+- COMPARISON: questions comparing two groups simultaneously ("compare Phase 1 vs Phase 2", "industry vs academia")
+- CORRELATION: questions about relationship between two numeric variables ("enrollment vs year", "size vs phase", "relationship between")
+- RELATIONSHIP_NETWORK: questions about connections between entities ("which drugs are studied together", "co-occurrence", "network", "connections between")
+- RANKING: questions asking for top/bottom items ("top 10 sponsors", "most common conditions", "which sponsor has the most")
+
+Phase normalization — map user input to canonical CT.gov API values:
+"phase 1" / "Phase 1" → "PHASE1"
+"phase 2" / "Phase 2" → "PHASE2"
+"phase 3" / "Phase 3" → "PHASE3"
+"phase 4" / "Phase 4" → "PHASE4"
+"early phase 1" / "Early Phase 1" → "EARLY_PHASE1"
+
+Rules:
+- If a field is not mentioned, set it to null.
+- Do not hallucinate entities not present in the query.
+- query_interpretation: one concise sentence describing what the user wants to see.
+- assumptions: list any assumptions you are making (empty list if none).
+"""
+
+
+class QueryParser:
+    def __init__(self, openai_client: AsyncOpenAI, model: str = "gpt-4o-mini") -> None:
+        self._client = openai_client
+        self._model = model
+
+    async def parse(
+        self,
+        query: str,
+        overrides: dict[str, Any],
+    ) -> ParsedQuery:
+        user_msg = f"Query: {query}"
+        if any(v is not None for v in overrides.values()):
+            user_msg += f"\nAdditional structured fields provided by user: {overrides}"
+
+        completion = await self._client.beta.chat.completions.parse(
+            model=self._model,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg},
+            ],
+            response_format=ParsedQuery,
+            temperature=0,
+        )
+        result: ParsedQuery = completion.choices[0].message.parsed  # type: ignore[assignment]
+
+        # Structured overrides from the request body take priority over LLM extraction
+        if overrides.get("drug_name"):
+            result.entities.drug_name = overrides["drug_name"]
+        if overrides.get("condition"):
+            result.entities.condition = overrides["condition"]
+        if overrides.get("phase"):
+            result.entities.phase = overrides["phase"]
+        if overrides.get("sponsor"):
+            result.entities.sponsor = overrides["sponsor"]
+        if overrides.get("country"):
+            result.entities.country = overrides["country"]
+        if overrides.get("start_year") is not None:
+            result.entities.start_year = overrides["start_year"]
+        if overrides.get("end_year") is not None:
+            result.entities.end_year = overrides["end_year"]
+
+        return result

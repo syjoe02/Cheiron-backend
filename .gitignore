@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# MacOS
+.DS_Store
+
 # etc
 .claude/
 .env

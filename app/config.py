@@ -7,8 +7,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     openai_api_key: str
-    fast_model: str = "gpt-4o-mini"
-    smart_model: str = "gpt-4o"
+    fast_model: str = "gpt-4.1-mini"
+    smart_model: str = "gpt-4.1"
     ct_base_url: str = "https://clinicaltrials.gov/api/v2"
     ct_page_size: int = 100
     cache_ttl: int = 3600

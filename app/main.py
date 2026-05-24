@@ -14,9 +14,9 @@ from app.errors.exceptions import AppException
 from app.errors.handlers import app_exception_handler
 from app.models.request import QueryRequest
 from app.models.response import VisualizationResponse
-from app.pipeline.api_builder import build_ct_params, get_phase_filter
+from app.pipeline.api_builder import build_ct_params, build_ct_params_for_entity, get_phase_filter
 from app.pipeline.data_fetcher import DataFetcher
-from app.pipeline.query_parser import QueryParser
+from app.pipeline.query_parser import QueryIntent, QueryParser
 from app.pipeline.response_builder import ResponseBuilder
 from app.pipeline.transformer import Transformer
 from app.pipeline.viz_selector import VizSelector
@@ -86,26 +86,70 @@ async def query_endpoint(request: QueryRequest) -> VisualizationResponse:
         ct_params = build_ct_params(parsed, request)
         phase_filter = get_phase_filter(request, parsed)
 
-        # Step 3: Fetch data from ClinicalTrials.gov
+        # Merge LLM-extracted temporal entities; explicit request fields take priority.
+        effective_request = request.model_copy(update={
+            "start_year": request.start_year if request.start_year is not None else parsed.entities.start_year,
+            "end_year": request.end_year if request.end_year is not None else parsed.entities.end_year,
+        })
+
+        # Step 3 & 4: Fetch data and transform
         ct_client = ClinicalTrialsClient(_http_client)
         fetcher = DataFetcher(ct_client)
-        studies, total_count = await fetcher.fetch(ct_params, max_results=request.max_results)
-
-        if not studies:
-            raise AppException(ErrorCode.NO_CLINICAL_TRIALS)
-
-        # Build study lookup dict for citation resolution
-        study_lookup = {
-            s["protocolSection"]["identificationModule"]["nctId"]: s
-            for s in studies
-            if s.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
-        }
-
-        # Step 4: ClinicalTrials raw JSON to chart data (pandas / networkx)
         transformer = Transformer()
-        transformed_data, citation_map = transformer.transform(
-            parsed.intent, studies, phase_filter, request
-        )
+
+        comparison_entities = parsed.entities.comparison_entities
+        comparison_dim = parsed.entities.comparison_dimension or "drug_name"
+        phase_meta: dict = {}
+
+        if (
+            parsed.intent == QueryIntent.COMPARISON
+            and comparison_entities
+            and len(comparison_entities) >= 2
+        ):
+            # Fetch a separate dataset for each named entity
+            entity_studies: dict[str, list] = {}
+            for entity in comparison_entities:
+                e_params = build_ct_params_for_entity(parsed, request, entity, comparison_dim)
+                e_list, _ = await fetcher.fetch(e_params, max_results=request.max_results)
+                entity_studies[entity] = e_list
+
+            if not any(entity_studies.values()):
+                raise AppException(ErrorCode.NO_CLINICAL_TRIALS)
+
+            study_lookup = {}
+            for e_list in entity_studies.values():
+                for s in e_list:
+                    nct_id = (
+                        s.get("protocolSection", {})
+                        .get("identificationModule", {})
+                        .get("nctId")
+                    )
+                    if nct_id:
+                        study_lookup[nct_id] = s
+
+            total_count = sum(len(v) for v in entity_studies.values())
+            _result = transformer.transform_comparison_entities(
+                entity_studies, phase_filter, effective_request
+            )
+            transformed_data, citation_map = _result
+            phase_meta = _result.phase_meta
+        else:
+            # Single-entity path (all non-comparison intents)
+            studies, total_count = await fetcher.fetch(ct_params, max_results=request.max_results)
+
+            if not studies:
+                raise AppException(ErrorCode.NO_CLINICAL_TRIALS)
+
+            study_lookup = {
+                s["protocolSection"]["identificationModule"]["nctId"]: s
+                for s in studies
+                if s.get("protocolSection", {}).get("identificationModule", {}).get("nctId")
+            }
+            _result = transformer.transform(
+                parsed.intent, studies, phase_filter, effective_request
+            )
+            transformed_data, citation_map = _result
+            phase_meta = _result.phase_meta
 
         # Step 5: LLM viz selection (gpt-4.1, sees schema only — no raw values)
         viz_selector = VizSelector(_openai_client, model=settings.smart_model)
@@ -145,6 +189,7 @@ async def query_endpoint(request: QueryRequest) -> VisualizationResponse:
             parsed_query=parsed,
             request=request,
             total_count=total_count,
+            phase_meta=phase_meta,
         )
 
     except AppException:

@@ -1,9 +1,9 @@
-import httpx
+import httpx # async
 from typing import Any
 
 CT_BASE = "https://clinicaltrials.gov/api/v2"
 
-# Sparse field list — only fetch what we need to minimize response size
+# API field lists
 FIELDS = ",".join([
     "protocolSection.identificationModule.nctId",
     "protocolSection.identificationModule.briefTitle",
@@ -33,6 +33,7 @@ class ClinicalTrialsClient:
             "fields": FIELDS,
             **params,
         }
+        # if page_token is exists, add it to the request parameters
         if page_token:
             request_params["pageToken"] = page_token
 
@@ -44,16 +45,12 @@ class ClinicalTrialsClient:
         response.raise_for_status()
         return response.json()
 
+    # fetch all studies 
     async def fetch_all(
         self,
         params: dict[str, str],
-        max_results: int = 500,
+        max_results: int = 500, # limit to avoid fetching a lot of records
     ) -> tuple[list[dict[str, Any]], int | None]:
-        """
-        Paginate and collect studies up to max_results.
-        Returns (studies, total_count).
-        total_count is only available when countTotal=true is in params.
-        """
         studies: list[dict[str, Any]] = []
         page_token: str | None = None
         total_count: int | None = None

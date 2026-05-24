@@ -37,7 +37,7 @@ def make_mock_client(completion: MagicMock) -> MagicMock:
 async def test_query_parser_returns_parsed_intent():
     completion = make_mock_completion(QueryIntent.TREND_OVER_TIME)
     client = make_mock_client(completion)
-    parser = QueryParser(client, model="gpt-4o-mini")
+    parser = QueryParser(client, model="gpt-4.1-mini")
 
     result = await parser.parse("How many trials per year?", overrides={})
     assert result.intent == QueryIntent.TREND_OVER_TIME
@@ -48,7 +48,7 @@ async def test_query_parser_returns_parsed_intent():
 async def test_query_parser_override_drug_name():
     completion = make_mock_completion(QueryIntent.DISTRIBUTION, drug_name="WrongDrug")
     client = make_mock_client(completion)
-    parser = QueryParser(client, model="gpt-4o-mini")
+    parser = QueryParser(client, model="gpt-4.1-mini")
 
     result = await parser.parse(
         "Distribution by phase",

@@ -5,9 +5,11 @@ import pandas as pd
 from app.models.request import QueryRequest
 from app.models.response import Citation, DataPoint, VisualizationResponse, VizSpec
 from app.pipeline.query_parser import ParsedQuery, QueryIntent
+from app.pipeline.transformer import generate_comparison_insight
 from app.pipeline.viz_selector import VizSpecOutput
 
 
+# citation schema based on nct_id lists
 def build_citations(
     nct_ids: list[str],
     study_lookup: dict[str, dict[str, Any]],
@@ -26,7 +28,7 @@ def build_citations(
         citations.append(Citation(nct_id=nct_id, excerpt=brief_title[:200]))
     return citations
 
-
+# ResponseBuilder (last pipeline), 변환된 데이터를 시각화 사양과 결합하여 최종 VisualizationResponse를 생성
 class ResponseBuilder:
     def build(
         self,
@@ -38,16 +40,20 @@ class ResponseBuilder:
         parsed_query: ParsedQuery,
         request: QueryRequest,
         total_count: int | None,
+        phase_meta: dict[str, Any] | None = None,
     ) -> VisualizationResponse:
+        # graph/network visualization
         if intent == QueryIntent.RELATIONSHIP_NETWORK:
             data_points = self._build_network_points(
                 transformed_data, citation_map, study_lookup
             )
+        # table/chart visualization
         else:
             data_points = self._build_tabular_points(
                 transformed_data, citation_map, study_lookup
             )
 
+        # frontend renders viz based on chart type and schema
         viz = VizSpec(
             type=viz_spec_out.chart_type,  # type: ignore[arg-type]
             title=viz_spec_out.title,
@@ -65,9 +71,10 @@ class ResponseBuilder:
                 "country": request.country or e.country,
                 "start_year": request.start_year or e.start_year,
                 "end_year": request.end_year or e.end_year,
-            }.items() if v is not None
+            }.items() if v is not None # exclude None
         }
 
+        # parsed_query + visualization assumptions combined
         all_assumptions = (parsed_query.assumptions or []) + (viz_spec_out.assumptions or [])
 
         meta: dict[str, Any] = {
@@ -79,6 +86,15 @@ class ResponseBuilder:
             "total_matching": total_count,
         }
 
+        if phase_meta:
+            meta.update(phase_meta)
+
+        # comaparison query인 경우 추가 insight 생성 -> meta
+        if intent == QueryIntent.COMPARISON and isinstance(transformed_data, pd.DataFrame):
+            insight = generate_comparison_insight(transformed_data)
+            if insight:
+                meta["comparison_insight"] = insight
+
         if viz_spec_out.sort_order:
             meta["sort_order"] = viz_spec_out.sort_order
         if viz_spec_out.time_granularity:
@@ -88,6 +104,7 @@ class ResponseBuilder:
 
         return VisualizationResponse(visualization=viz, meta=meta)
 
+    # 일반 Dataframe을 시각화 포인트 리스트로 변환
     def _build_tabular_points(
         self,
         df: pd.DataFrame,
@@ -100,17 +117,23 @@ class ResponseBuilder:
         points = []
         for _, row in df.iterrows():
             row_dict = {
-                k: (int(v) if hasattr(v, "item") else v)
+                k: (v.item() if hasattr(v, "item") else v)
                 for k, v in row.to_dict().items()
-                if not isinstance(v, list)  # skip list fields from correlation
+                if not isinstance(v, list)
             }
 
-            # Try to find the citation key from the first column value
+            # citation key from the first column value
             first_val = str(list(row.to_dict().values())[0])
             nct_ids = citation_map.get(first_val, [])
 
-            # For scatter/correlation, nct_id is the key
-            if "nct_id" in row_dict:
+            # comparison data — key is "entity|category"
+            if "entity" in row_dict and "category" in row_dict:
+                nct_ids = citation_map.get(
+                    f"{row_dict['entity']}|{row_dict['category']}", []
+                )
+
+            # scatter/correlation, nct_id is the key
+            elif "nct_id" in row_dict:
                 nct_ids = citation_map.get(str(row_dict["nct_id"]), [])
 
             citations = build_citations(nct_ids, study_lookup)

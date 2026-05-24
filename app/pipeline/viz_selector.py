@@ -13,6 +13,23 @@ INTENT_DEFAULT_TYPE: dict[QueryIntent, str] = {
     QueryIntent.CORRELATION: "scatter_plot",
     QueryIntent.RELATIONSHIP_NETWORK: "network_graph",
     QueryIntent.RANKING: "bar_chart",
+    QueryIntent.OUTLIER_ANALYSIS: "scatter_plot",
+}
+
+# Intent-specific encoding overrides for the rule-based fallback path.
+# Takes precedence over _FALLBACK_ENCODINGS when set.
+_INTENT_ENCODING_OVERRIDES: dict[QueryIntent, dict[str, Any]] = {
+    QueryIntent.COMPARISON: {
+        "x": {"field": "category", "type": "nominal"},
+        "y": {"field": "trial_count", "type": "quantitative"},
+        "series": {"field": "entity", "type": "nominal"},
+    },
+    QueryIntent.OUTLIER_ANALYSIS: {
+        "x": {"field": "enrollment", "type": "quantitative"},
+        "y": {"field": "z_score", "type": "quantitative"},
+        "color": {"field": "phase_str", "type": "nominal"},
+        "label": {"field": "nct_id", "type": "nominal"},
+    },
 }
 
 # Rule-based encoding fallbacks per chart type
@@ -86,7 +103,7 @@ Generate a clear, descriptive title for the chart based on the query interpretat
 
 
 class VizSelector:
-    def __init__(self, openai_client: AsyncOpenAI, model: str = "gpt-4o") -> None:
+    def __init__(self, openai_client: AsyncOpenAI, model: str = "gpt-4.1") -> None:
         self._client = openai_client
         self._model = model
 
@@ -135,9 +152,13 @@ def _rule_based_viz(
     query_interpretation: str,
 ) -> VizSpecOutput:
     chart_type = INTENT_DEFAULT_TYPE.get(intent, "bar_chart")
+    encoding = (
+        _INTENT_ENCODING_OVERRIDES.get(intent)
+        or _FALLBACK_ENCODINGS.get(chart_type, {})
+    )
     return VizSpecOutput(
         chart_type=chart_type,
         title=query_interpretation,
-        encoding=_FALLBACK_ENCODINGS.get(chart_type, {}),
+        encoding=encoding,
         assumptions=["Visualization type determined by rule-based fallback"],
     )

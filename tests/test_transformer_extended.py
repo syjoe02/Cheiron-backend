@@ -6,12 +6,14 @@ from app.pipeline.query_parser import QueryIntent
 from app.pipeline.transformer import (
     Transformer,
     _apply_year_filter,
+    _extract_top_n,
     _infer_comparison_dims,
     _infer_distribution_dim,
     _infer_ranking_dim,
     normalize_studies,
     transform_comparison,
     transform_network,
+    transform_ranking,
 )
 
 
@@ -165,3 +167,261 @@ def test_transformer_with_year_range(sample_study, sample_study_phase3):
     if isinstance(data, pd.DataFrame) and not data.empty:
         assert all(data["start_year"] >= 2019)
         assert all(data["start_year"] <= 2021)
+
+
+# ---------------------------------------------------------------------------
+# _infer_ranking_dim — intervention keyword detection
+# ---------------------------------------------------------------------------
+
+def test_infer_ranking_dim_interventions_keyword():
+    import pandas as pd
+    req = QueryRequest(query="What are the top 5 most commonly used interventions in diabetes studies?")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "interventions"
+
+
+def test_infer_ranking_dim_drug_keyword():
+    import pandas as pd
+    req = QueryRequest(query="Which drugs are most common in phase 3 trials?")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "interventions"
+
+
+def test_infer_ranking_dim_treatment_keyword():
+    import pandas as pd
+    req = QueryRequest(query="Top treatments used in breast cancer trials")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "interventions"
+
+
+def test_infer_ranking_dim_sponsor_when_no_keyword():
+    import pandas as pd
+    req = QueryRequest(query="Which sponsors have the most trials?", condition="cancer")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "sponsor"
+
+
+def test_infer_ranking_dim_default_no_keywords():
+    import pandas as pd
+    req = QueryRequest(query="Who is leading the most studies?")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "sponsor"
+
+
+# ---------------------------------------------------------------------------
+# _infer_ranking_dim — new dimension mappings
+# ---------------------------------------------------------------------------
+
+def test_infer_ranking_dim_country():
+    import pandas as pd
+    req = QueryRequest(query="Which countries conduct the most lung cancer clinical trials?")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "primary_country"
+
+
+def test_infer_ranking_dim_countries_plural():
+    import pandas as pd
+    req = QueryRequest(query="Top countries by trial count")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "primary_country"
+
+
+def test_infer_ranking_dim_nation():
+    import pandas as pd
+    req = QueryRequest(query="Which nation runs the most cancer studies?")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "primary_country"
+
+
+def test_infer_ranking_dim_phase():
+    import pandas as pd
+    req = QueryRequest(query="Which phase has the most trials?")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "phase_str"
+
+
+def test_infer_ranking_dim_phases_plural():
+    import pandas as pd
+    req = QueryRequest(query="Show trial counts across phases")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "phase_str"
+
+
+def test_infer_ranking_dim_status():
+    import pandas as pd
+    req = QueryRequest(query="What recruitment statuses are most common?")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "status"
+
+
+def test_infer_ranking_dim_recruiting_keyword():
+    import pandas as pd
+    req = QueryRequest(query="Which recruiting categories have the highest trial counts?")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "status"
+
+
+def test_infer_ranking_dim_sponsor_explicit():
+    import pandas as pd
+    req = QueryRequest(query="Which company sponsors the most cancer studies?")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "sponsor"
+
+
+def test_infer_ranking_dim_organization_keyword():
+    import pandas as pd
+    req = QueryRequest(query="Which organizations run the most trials?")
+    assert _infer_ranking_dim(req, pd.DataFrame()) == "sponsor"
+
+
+# ---------------------------------------------------------------------------
+# _extract_top_n
+# ---------------------------------------------------------------------------
+
+def test_extract_top_n_explicit():
+    assert _extract_top_n("What are the top 5 most common interventions?") == 5
+
+
+def test_extract_top_n_different_number():
+    assert _extract_top_n("Show me the top 10 sponsors") == 10
+
+
+def test_extract_top_n_default_when_absent():
+    assert _extract_top_n("Which interventions are most common?") == 20
+
+
+def test_extract_top_n_custom_default():
+    assert _extract_top_n("Any interventions?", default=15) == 15
+
+
+# ---------------------------------------------------------------------------
+# transform_ranking with rank_by="interventions"
+# ---------------------------------------------------------------------------
+
+def _make_diabetes_study(nct_id: str, interventions: list[str]) -> dict:
+    return {
+        "protocolSection": {
+            "identificationModule": {"nctId": nct_id, "briefTitle": f"Study {nct_id}"},
+            "statusModule": {"overallStatus": "RECRUITING", "startDateStruct": {"date": "2021"}},
+            "designModule": {"phases": ["PHASE2"], "enrollmentInfo": {"count": 100}},
+            "conditionsModule": {"conditions": ["Diabetes"]},
+            "sponsorCollaboratorsModule": {"leadSponsor": {"name": "Sponsor A"}},
+            "armsInterventionsModule": {
+                "interventions": [{"name": n} for n in interventions]
+            },
+            "contactsLocationsModule": {"locations": [{"country": "US"}]},
+        }
+    }
+
+
+def test_ranking_interventions_returns_intervention_names():
+    studies = [
+        _make_diabetes_study("NCT001", ["Metformin", "Lifestyle Intervention"]),
+        _make_diabetes_study("NCT002", ["Metformin"]),
+        _make_diabetes_study("NCT003", ["Insulin"]),
+        _make_diabetes_study("NCT004", ["Metformin", "Insulin"]),
+    ]
+    df = normalize_studies(studies)
+    result, cmap = transform_ranking(df, phase_filter=None, rank_by="interventions", top_n=20)
+
+    assert list(result.columns) == ["category", "trial_count"]
+    # Metformin appears in 3 studies — must be ranked first
+    assert result.iloc[0]["category"] == "Metformin"
+    assert result.iloc[0]["trial_count"] == 3
+    # Insulin appears in 2 studies
+    insulin_row = result[result["category"] == "Insulin"]
+    assert len(insulin_row) == 1
+    assert insulin_row.iloc[0]["trial_count"] == 2
+    # No sponsor names in the output
+    assert "Sponsor A" not in result["category"].values
+
+
+def test_ranking_interventions_citation_map():
+    studies = [
+        _make_diabetes_study("NCT001", ["Metformin"]),
+        _make_diabetes_study("NCT002", ["Metformin"]),
+    ]
+    df = normalize_studies(studies)
+    _, cmap = transform_ranking(df, phase_filter=None, rank_by="interventions", top_n=20)
+
+    assert "Metformin" in cmap
+    assert set(cmap["Metformin"]) == {"NCT001", "NCT002"}
+
+
+def test_ranking_interventions_respects_top_n():
+    studies = [
+        _make_diabetes_study(f"NCT{i:03d}", [f"Drug{i}", "Metformin"])
+        for i in range(10)
+    ]
+    df = normalize_studies(studies)
+    result, _ = transform_ranking(df, phase_filter=None, rank_by="interventions", top_n=3)
+    assert len(result) <= 3
+
+
+def test_ranking_interventions_empty_lists_handled():
+    """Studies with no interventions should not produce empty-string rows."""
+    studies = [
+        _make_diabetes_study("NCT001", []),
+        _make_diabetes_study("NCT002", ["Metformin"]),
+    ]
+    df = normalize_studies(studies)
+    result, _ = transform_ranking(df, phase_filter=None, rank_by="interventions", top_n=20)
+    assert "" not in result["category"].values
+    assert result.iloc[0]["category"] == "Metformin"
+
+
+def test_ranking_interventions_all_empty_returns_empty_df():
+    studies = [_make_diabetes_study("NCT001", []), _make_diabetes_study("NCT002", [])]
+    df = normalize_studies(studies)
+    result, cmap = transform_ranking(df, phase_filter=None, rank_by="interventions", top_n=20)
+    assert result.empty
+    assert cmap == {}
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: Transformer dispatcher picks up "top 5 interventions"
+# ---------------------------------------------------------------------------
+
+def test_transformer_dispatch_intervention_ranking():
+    studies = [
+        _make_diabetes_study("NCT001", ["Metformin", "Lifestyle Intervention"]),
+        _make_diabetes_study("NCT002", ["Metformin"]),
+        _make_diabetes_study("NCT003", ["Insulin"]),
+    ]
+    t = Transformer()
+    req = QueryRequest(
+        query="What are the top 5 most commonly used interventions in studies related to diabetes?",
+        condition="diabetes",
+    )
+    result, cmap = t.transform(QueryIntent.RANKING, studies, phase_filter=None, request=req)
+    import pandas as pd
+    assert isinstance(result, pd.DataFrame)
+    assert "category" in result.columns
+    assert "trial_count" in result.columns
+    assert len(result) <= 5
+    # Metformin should be ranked first (2 studies)
+    assert result.iloc[0]["category"] == "Metformin"
+    assert "Sponsor A" not in result["category"].values
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: Transformer dispatcher picks up country ranking
+# ---------------------------------------------------------------------------
+
+def _make_country_study(nct_id: str, country: str) -> dict:
+    return {
+        "protocolSection": {
+            "identificationModule": {"nctId": nct_id, "briefTitle": f"Study {nct_id}"},
+            "statusModule": {"overallStatus": "RECRUITING", "startDateStruct": {"date": "2021"}},
+            "designModule": {"phases": ["PHASE2"], "enrollmentInfo": {"count": 100}},
+            "conditionsModule": {"conditions": ["Lung Cancer"]},
+            "sponsorCollaboratorsModule": {"leadSponsor": {"name": "Sponsor X"}},
+            "armsInterventionsModule": {"interventions": [{"name": "Chemo"}]},
+            "contactsLocationsModule": {"locations": [{"country": country}]},
+        }
+    }
+
+
+def test_transformer_dispatch_country_ranking():
+    import pandas as pd
+    studies = (
+        [_make_country_study(f"NCT1{i:02d}", "US") for i in range(5)]
+        + [_make_country_study(f"NCT2{i:02d}", "China") for i in range(3)]
+        + [_make_country_study(f"NCT3{i:02d}", "Korea") for i in range(2)]
+    )
+    t = Transformer()
+    req = QueryRequest(query="Which countries conduct the most lung cancer clinical trials?")
+    result, _ = t.transform(QueryIntent.RANKING, studies, phase_filter=None, request=req)
+    assert isinstance(result, pd.DataFrame)
+    assert "category" in result.columns
+    # US has most studies — must be top
+    assert result.iloc[0]["category"] == "US"
+    # Sponsor should NOT appear
+    assert "Sponsor X" not in result["category"].values
